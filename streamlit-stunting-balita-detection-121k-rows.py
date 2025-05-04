@@ -1,94 +1,150 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-# Konfigurasi halaman
 st.set_page_config(page_title="Deteksi Stunting Balita", layout="wide")
-st.title("📊 UTS ML2 - Deteksi Stunting pada Balita")
-st.markdown("Aplikasi ini menggunakan Machine Learning untuk mendeteksi potensi stunting pada balita.")
 
-# Upload file CSV
-uploaded_file = st.file_uploader("📁 Unggah file dataset (.csv)", type="csv")
+@st.cache_data
+def load_data():
+    return pd.read_csv("data/stunting_data.csv")
 
-if uploaded_file is not None:
-    # Load data
-    df = pd.read_csv(uploaded_file)
+df = load_data()
 
-    # Kolom target
-    target_col = "stunting"
-    if target_col not in df.columns:
-        st.error(f"❌ Kolom target '{target_col}' tidak ditemukan di dataset.")
-        st.stop()
+st.title("📊 Deteksi Stunting pada Balita")
+st.markdown("Dataset dengan **121K data** untuk mendeteksi apakah balita mengalami stunting.")
 
-    # Tampilkan data awal
-    st.subheader("📄 Data Awal")
-    st.write(df.head())
+if st.checkbox("Tampilkan 5 Data Pertama"):
+    st.dataframe(df.head())
 
-    # Exploratory Data Analysis
-    st.subheader("📊 Exploratory Data Analysis (EDA)")
+if st.checkbox("Info Dataset"):
+    st.write("Jumlah baris dan kolom:", df.shape)
+    st.write("Tipe data:")
+    st.write(df.dtypes)
 
-    st.markdown("**1. Statistik Deskriptif**")
-    st.write(df.describe())
+if st.checkbox("Cek Missing Values"):
+    st.write(df.isnull().sum())
 
-    st.markdown("**2. Distribusi Label 'Stunting'**")
-    st.bar_chart(df[target_col].value_counts())
+st.subheader("📈 Visualisasi Data (EDA)")
+grafik = st.selectbox("Pilih Grafik", ["Distribusi Stunting", "Usia vs Tinggi Badan", "Jenis Kelamin", "Tinggi Badan Boxplot", "Korelasi Fitur"])
 
-    st.markdown("**3. Heatmap Korelasi**")
-    fig1, ax1 = plt.subplots()
-    sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax1)
-    st.pyplot(fig1)
+if grafik == "Distribusi Stunting":
+    sns.countplot(x='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Usia vs Tinggi Badan":
+    sns.scatterplot(x='usia_bulan', y='tinggi_badan', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Jenis Kelamin":
+    sns.countplot(x='jenis_kelamin', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Tinggi Badan Boxplot":
+    sns.boxplot(x='stunting', y='tinggi_badan', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Korelasi Fitur":
+    st.write("Korelasi antar fitur numerik:")
+    corr = df.select_dtypes(include='number').corr()
+    sns.heatmap(corr, annot=True, cmap='Blues')
+    st.pyplot(plt.gcf())
+    plt.clf()
 
-    st.markdown("**4. Histogram Fitur Numerik**")
-    num_cols = df.select_dtypes(include=np.number).columns.tolist()
-    if len(num_cols) > 1:
-        fig2, axs2 = plt.subplots(len(num_cols)-1, 1, figsize=(10, 5*(len(num_cols)-1)))
-        for i, col in enumerate([c for c in num_cols if c != target_col]):
-            sns.histplot(df[col], bins=20, ax=axs2[i], kde=True)
-            axs2[i].set_title(f"Distribusi: {col}")
-        st.pyplot(fig2)
-
-    st.markdown("**5. Boxplot Contoh Fitur vs Target**")
-    example_col = [col for col in num_cols if col != target_col][0]
-    fig3, ax3 = plt.subplots()
-    sns.boxplot(x=target_col, y=example_col, data=df, ax=ax3)
-    st.pyplot(fig3)
-
-    # Preprocessing dan Modeling
-    st.subheader("🤖 Modeling - Random Forest Classifier")
-
-    X = df.drop(columns=[target_col])
-    y = df[target_col]
-
-    # Encode kolom kategorikal jika ada
+st.subheader("⚙️ Modeling")
+if 'stunting' not in df.columns:
+    st.error("Kolom 'stunting' tidak ditemukan dalam dataset.")
+else:
+    X = df.drop('stunting', axis=1)
+    y = df['stunting']
     X = pd.get_dummies(X)
-
-    # Split data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Train model
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model = RandomForestClassifier()
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-
-    # Evaluasi
     acc = accuracy_score(y_test, y_pred)
-    cm = confusion_matrix(y_test, y_pred)
-    report = classification_report(y_test, y_pred)
+    st.success(f"Akurasi Model: {acc:.2f}")
+    if st.checkbox("Tampilkan Confusion Matrix dan Report"):
+        cm = confusion_matrix(y_test, y_pred)
+        st.write("Confusion Matrix:")
+        st.write(cm)
+        st.write("Classification Report:")
+        st.text(classification_report(y_test, y_pred))
+import streamlit as st
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-    st.success(f"✅ Akurasi Model: {acc:.2%}")
+st.set_page_config(page_title="Deteksi Stunting Balita", layout="wide")
 
-    st.markdown("**Confusion Matrix**")
-    fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax_cm)
-    st.pyplot(fig_cm)
+@st.cache_data
+def load_data():
+    return pd.read_csv("data/stunting_data.csv")
 
-    st.markdown("**Classification Report**")
-    st.text(report)
+df = load_data()
 
+st.title("📊 Deteksi Stunting pada Balita")
+st.markdown("Dataset dengan **121K data** untuk mendeteksi apakah balita mengalami stunting.")
+
+if st.checkbox("Tampilkan 5 Data Pertama"):
+    st.dataframe(df.head())
+
+if st.checkbox("Info Dataset"):
+    st.write("Jumlah baris dan kolom:", df.shape)
+    st.write("Tipe data:")
+    st.write(df.dtypes)
+
+if st.checkbox("Cek Missing Values"):
+    st.write(df.isnull().sum())
+
+st.subheader("📈 Visualisasi Data (EDA)")
+grafik = st.selectbox("Pilih Grafik", ["Distribusi Stunting", "Usia vs Tinggi Badan", "Jenis Kelamin", "Tinggi Badan Boxplot", "Korelasi Fitur"])
+
+if grafik == "Distribusi Stunting":
+    sns.countplot(x='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Usia vs Tinggi Badan":
+    sns.scatterplot(x='usia_bulan', y='tinggi_badan', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Jenis Kelamin":
+    sns.countplot(x='jenis_kelamin', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Tinggi Badan Boxplot":
+    sns.boxplot(x='stunting', y='tinggi_badan', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Korelasi Fitur":
+    st.write("Korelasi antar fitur numerik:")
+    corr = df.select_dtypes(include='number').corr()
+    sns.heatmap(corr, annot=True, cmap='Blues')
+    st.pyplot(plt.gcf())
+    plt.clf()
+
+st.subheader("⚙️ Modeling")
+if 'stunting' not in df.columns:
+    st.error("Kolom 'stunting' tidak ditemukan dalam dataset.")
 else:
-    st.info("Silakan unggah file CSV terlebih dahulu untuk mulai.")
+    X = df.drop('stunting', axis=1)
+    y = df['stunting']
+    X = pd.get_dummies(X)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestClassifier()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    st.success(f"Akurasi Model: {acc:.2f}")
+    if st.checkbox("Tampilkan Confusion Matrix dan Report"):
+        cm = confusion_matrix(y_test, y_pred)
+        st.write("Confusion Matrix:")
+        st.write(cm)
+        st.write("Classification Report:")
+        st.text(classification_report(y_test, y_pred))
