@@ -1,92 +1,75 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-import joblib
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-st.title("📊 Stunting Toddler Detection App")
-st.markdown("Prediksi status stunting pada balita berdasarkan fitur kesehatan dan demografi.")
+st.set_page_config(page_title="Deteksi Stunting Balita", layout="wide")
 
-# Load Data
 @st.cache_data
 def load_data():
-    df = pd.read_csv("stunting.csv")
-    return df
+    return pd.read_csv("data/stunting_data.csv")
 
 df = load_data()
-st.subheader("👶 Data Sampel")
-st.dataframe(df.head())
 
-# -------------------- EDA --------------------
-st.subheader("📈 Exploratory Data Analysis")
-fig, ax = plt.subplots()
-df['stunting_status'].value_counts().plot(kind='bar', ax=ax)
-st.pyplot(fig)
+st.title("📊 Deteksi Stunting pada Balita")
+st.markdown("Dataset dengan **121K data** untuk mendeteksi apakah balita mengalami stunting.")
 
-fig2 = plt.figure(figsize=(8, 5))
-sns.boxplot(data=df, x='stunting_status', y='age_months')
-st.pyplot(fig2)
+if st.checkbox("Tampilkan 5 Data Pertama"):
+    st.dataframe(df.head())
 
-col1, col2 = st.columns(2)
-with col1:
-    fig3 = plt.figure()
-    sns.histplot(df['weight_kg'], kde=True)
-    plt.title("Distribusi Berat Badan")
-    st.pyplot(fig3)
-with col2:
-    fig4 = plt.figure()
-    sns.histplot(df['height_cm'], kde=True)
-    plt.title("Distribusi Tinggi Badan")
-    st.pyplot(fig4)
+if st.checkbox("Info Dataset"):
+    st.write("Jumlah baris dan kolom:", df.shape)
+    st.write("Tipe data:")
+    st.write(df.dtypes)
 
-# -------------------- Modeling --------------------
-st.subheader("🤖 Model Pelatihan & Evaluasi")
+if st.checkbox("Cek Missing Values"):
+    st.write(df.isnull().sum())
 
-if st.checkbox("Train Model"):
-    st.write("🔁 Melatih model Random Forest...")
+st.subheader("📈 Visualisasi Data (EDA)")
+grafik = st.selectbox("Pilih Grafik", ["Distribusi Stunting", "Usia vs Tinggi Badan", "Jenis Kelamin", "Tinggi Badan Boxplot", "Korelasi Fitur"])
 
-    X = df.drop('stunting_status', axis=1)
-    y = df['stunting_status']
+if grafik == "Distribusi Stunting":
+    sns.countplot(x='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Usia vs Tinggi Badan":
+    sns.scatterplot(x='usia_bulan', y='tinggi_badan', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Jenis Kelamin":
+    sns.countplot(x='jenis_kelamin', hue='stunting', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Tinggi Badan Boxplot":
+    sns.boxplot(x='stunting', y='tinggi_badan', data=df)
+    st.pyplot(plt.gcf())
+    plt.clf()
+elif grafik == "Korelasi Fitur":
+    st.write("Korelasi antar fitur numerik:")
+    corr = df.select_dtypes(include='number').corr()
+    sns.heatmap(corr, annot=True, cmap='Blues')
+    st.pyplot(plt.gcf())
+    plt.clf()
 
-    # Encoding jika perlu
+st.subheader("⚙️ Modeling")
+if 'stunting' not in df.columns:
+    st.error("Kolom 'stunting' tidak ditemukan dalam dataset.")
+else:
+    X = df.drop('stunting', axis=1)
+    y = df['stunting']
     X = pd.get_dummies(X)
-
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model = RandomForestClassifier()
     model.fit(X_train, y_train)
-
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
-
-    st.success(f"Akurasi Model: {acc:.2%}")
-
-    cm = confusion_matrix(y_test, y_pred)
-    st.text("Confusion Matrix:")
-    st.dataframe(pd.DataFrame(cm, index=['Actual No', 'Actual Yes'], columns=['Pred No', 'Pred Yes']))
-
-    st.text("Classification Report:")
-    st.text(classification_report(y_test, y_pred))
-
-    # Simpan model
-    joblib.dump(model, "model.pkl")
-    st.success("✅ Model disimpan ke model.pkl")
-
-# -------------------- Prediksi --------------------
-st.subheader("🔍 Prediksi Stunting Baru")
-model = joblib.load("model.pkl")
-with st.form("prediction_form"):
-        age = st.number_input("Umur (bulan):", 0, 60, 12)
-        weight = st.number_input("Berat (kg):", 0.0, 20.0, 8.0)
-        height = st.number_input("Tinggi (cm):", 30.0, 120.0, 70.0)
-        gender = st.selectbox("Jenis Kelamin", ['Laki-laki', 'Perempuan'])
-
-        submitted = st.form_submit_button("Prediksi")
-        if submitted:
-            gender_num = 1 if gender == 'Laki-laki' else 0
-            input_df = pd.DataFrame([[age, weight, height, gender_num]], columns=['age_months', 'weight_kg', 'height_cm', 'gender'])
-            result = model.predict(input_df)[0]
-            st.success(f"Hasil Prediksi: {'STUNTING' if result == 1 else 'Normal'}")
+    st.success(f"Akurasi Model: {acc:.2f}")
+    if st.checkbox("Tampilkan Confusion Matrix dan Report"):
+        cm = confusion_matrix(y_test, y_pred)
+        st.write("Confusion Matrix:")
+        st.write(cm)
+        st.write("Classification Report:")
+        st.text(classification_report(y_test, y_pred))
